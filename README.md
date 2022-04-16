@@ -52,7 +52,7 @@ value_and_grad_fun = jax.jit(jax.value_and_grad(model.objective_fun, argnums=1),
 # Do gradient descent!
 learning_rate = 0.01
 for i in range(100):
-    key = jax.random.PRNGKey(i)  # If this is constant, this becomes deterministic ADVI
+    key = jax.random.PRNGKey(i)  # If the key is constant, ADVI becomes deterministic ADVI
     loss_value, grads = value_and_grad_fun(key, variational_dist, n_samples=10)
     variational_dist = variational_dist - learning_rate * grad
 
