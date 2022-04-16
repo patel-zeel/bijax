@@ -9,7 +9,7 @@ pip install advi_jax
 ### Design considerations
 
 * ADVI class is an object but `ADVI.objective_fun` is a pure function that can be optimized with `optax` or `jaxopt` or any other jax supported optimizers.
-* variational distribution parameters can be initialized with `ADVI.init` using a `distrax` or `tfp` distribution as an initializer (or any jax distribution that implements `.sample()` method in a similar way).
+* variational distribution parameters can be initialized with `ADVI.init` using a `distrax` or `tfp` distribution as an initializer (or any jax distribution that implements `.sample()` method in a similar way). I am using pytree flattening and unflattening to achieve this.
 * Users can pass the suitable bijectors of class `distrax.Bijector` to the variational distribution.
 * Transformation is directly applied to posterior and thus prior and likelihood stay untouched during the entire process. This way, after the training, the variational distribution is ready for sampling without any additional transformations. Also, this gives freedom to variational distribution to be constructed in more complex way as it is separated from the other parts of the model (see the example below).
 * If we do not change the `key` during the training, the method is called the deterministic ADVI.
