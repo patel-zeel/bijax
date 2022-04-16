@@ -58,5 +58,6 @@ for i in range(100):
 
 # Get the posterior samples
 key = jax.random.PRNGKey(2)
-posterior_samples = variational_dist.sample(seed=key, sample_shape=(100,))
+keys = jax.random.split(key, 1000)
+posterior_samples = jax.vmap(lambda key: variational_dist.sample(key))(keys)
 ```
