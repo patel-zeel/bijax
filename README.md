@@ -1,5 +1,11 @@
 ## ADVI in JAX
 
+### Installation
+
+```
+pip install advi_jax
+```
+
 ### Design considerations
 
 * ADVI class is an object but `ADVI.objective_fun` is a pure function that can be optimized with `optax` or `jaxopt` or any other jax supported optimizers.
