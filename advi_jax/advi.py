@@ -6,10 +6,9 @@ dist = tfp.distributions
 
 
 class ADVI:
-    def __init__(self, prior_dist, likelihood_log_prob_fun, bijector, data):
+    def __init__(self, prior_dist, likelihood_log_prob_fun, data):
         self.prior_dist = prior_dist
         self.likelihood_log_prob_fun = likelihood_log_prob_fun
-        self.bijector = bijector
         self.data = data
 
         # parallelize the objective function

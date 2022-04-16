@@ -1,5 +1,7 @@
 __pycache__/
 *.vscode
 *.pyc
+*.jpg
+*.png
 *.egg-info/
 advi_jax/_version.py

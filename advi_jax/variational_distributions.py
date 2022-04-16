@@ -20,12 +20,12 @@ class MeanField:
 
     u_mean: JAXArray = field(default_factory=lambda: jnp.zeros(()))
     u_scale: JAXArray = field(default_factory=lambda: jnp.zeros(()))
-    transformation: distrax.Bijector = field(default_factory=lambda: distrax.Identity())
+    bijector: distrax.Bijector = field(default_factory=lambda: distrax.Identity())
 
     def sample(self, key):
         scale = jnp.exp(self.u_scale)  # positivity constraint
         normal_posterior = dist.Normal(loc=self.u_mean, scale=scale)
-        transformed_posterior = distrax.Transformed(normal_posterior, self.transformation)
+        transformed_posterior = distrax.Transformed(normal_posterior, self.bijector)
 
         sample = transformed_posterior.sample(seed=key, sample_shape=self.u_mean.shape)
 
@@ -34,14 +34,17 @@ class MeanField:
     def log_prob(self, sample):
         scale = jnp.exp(self.u_scale)  # positivity constraint
         normal_posterior = dist.Normal(loc=self.u_mean, scale=scale)
-        transformed_posterior = distrax.Transformed(normal_posterior, self.transformation)
+        transformed_posterior = distrax.Transformed(normal_posterior, self.bijector)
 
         return transformed_posterior.log_prob(sample)
+
+    def prob(self, sample):
+        return jnp.exp(self.log_prob(sample))
 
     def sample_and_log_prob(self, key):
         scale = jnp.exp(self.u_scale)  # positivity constraint
         normal_posterior = dist.Normal(loc=self.u_mean, scale=scale)
-        transformed_posterior = distrax.Transformed(normal_posterior, self.transformation)
+        transformed_posterior = distrax.Transformed(normal_posterior, self.bijector)
 
         sample, log_prob = transformed_posterior.sample_and_log_prob(seed=key, sample_shape=self.u_mean.shape)
 
