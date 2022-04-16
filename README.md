@@ -54,7 +54,7 @@ learning_rate = 0.01
 for i in range(100):
     key = jax.random.PRNGKey(i)  # If the key is constant, ADVI becomes deterministic ADVI
     loss_value, grads = value_and_grad_fun(key, variational_dist, n_samples=10)
-    variational_dist = variational_dist - learning_rate * grad
+    variational_dist = variational_dist - learning_rate * grads
 
 # Get the posterior samples
 key = jax.random.PRNGKey(2)
