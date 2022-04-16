@@ -10,3 +10,6 @@ requires = [
 
 [tool.setuptools_scm]
 write_to = "advi_jax/_version.py"
+
+[tool.black]
+line-length = 120
