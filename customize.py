@@ -8,7 +8,7 @@ REPO_NAME = path[-1]
 PACKAGE_NAME = REPO_NAME
 AUTHOR = "Zeel B Patel"
 AUTHOR_EMAIL = "patel_zeel@iitgn.ac.in"
-description = "example description"
+description = "ADVI library for generelized graphical models"
 URL = "https://github.com/patel-zeel/" + REPO_NAME
 LICENSE = "MIT"
 LICENSE_FILE = "LICENSE"
@@ -75,7 +75,7 @@ with open(os.path.join(full_path, "requirements.txt"), "w") as f:
         f.write("\nsetuptools_scm_git_archive\n")
 
 # Initialize project folder
-os.makedirs(full_path + PACKAGE_NAME)
+os.makedirs(os.path.join(full_path , PACKAGE_NAME))
 with open(os.path.join(full_path, PACKAGE_NAME, "__init__.py"), "w") as f:
     f.write("from ._version import version as __version__  # noqa")
 
