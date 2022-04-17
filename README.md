@@ -35,7 +35,7 @@ tosses = jnp.array([0, 1, 0, 0, 1, 0])
 
 # Prior and likelihood
 prior_dist = dist.Beta(2.0, 3.0)
-likelihood_log_prob_fun = lambda theta: dist.Bernoulli(probs=theta).log_prob(tosses).sum()
+likelihood_log_prob_fun = lambda theta, tosses: dist.Bernoulli(probs=theta).log_prob(tosses).sum()
 
 # ADVI model
 model = ADVI(prior_dist, likelihood_log_prob_fun, tosses)
