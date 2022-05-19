@@ -1,4 +1,3 @@
-from turtle import pos
 import jax
 import jax.numpy as jnp
 import distrax
@@ -8,26 +7,29 @@ import matplotlib.pyplot as plt
 
 # Data generation
 key = jax.random.PRNGKey(0)
-X = jax.random.normal(key, shape=(100, 1))
+X = jax.random.normal(key, shape=(100, 3))
 X_ = jnp.linspace(-3, 3, 100).reshape(-1, 1)
-true_theta = jnp.array([2.0])
+true_theta = jnp.array([0.5, 2.0, 10.0])
 true_noise_scale = jnp.array(1.0)
 y = jax.vmap(lambda x: jnp.dot(x, true_theta))(X)
 key = jax.random.split(key)[0]
 y_noisy = y + jax.random.normal(key, shape=y.shape) * true_noise_scale
 print(X.shape, y.shape, y_noisy.shape)
 
-plt.scatter(X, y_noisy)
-plt.savefig("data.png")
+# plt.scatter(X, y_noisy)
+# plt.savefig("data.png")
 
 # Define prior distributions
 prior_dists = {
-    "theta": distrax.MultivariateNormalDiag(jnp.zeros((X.shape[1],)), jnp.ones((X.shape[1],))),
-    "noise_scale": distrax.Gamma(jnp.array(1.0), jnp.array(1.0)),
+    "theta": lambda: distrax.MultivariateNormalDiag(jnp.zeros((X.shape[1],)), jnp.ones((X.shape[1],))),
+    "noise_scale": lambda: distrax.Gamma(jnp.array(1.0), jnp.array(1.0)),
 }
 
 # Transform prior distributions
-transforms = {"theta": lambda x: x, "noise_scale": lambda x: jnp.log(1 + jnp.exp(x))}
+transforms = {
+    "theta": lambda: distrax.Lambda(lambda x: x),
+    "noise_scale": lambda: distrax.Lambda(lambda x: jnp.log(1 + jnp.exp(x))),
+}
 
 # Define log likelihood function
 def log_likelihood_fun(data, theta):
@@ -46,28 +48,21 @@ key = jax.random.split(key, 6)[-1]
 params = model.init(key, distrax.Normal(loc=0.0, scale=1.0))
 data = (X, y_noisy)
 
-# Define objective
-def objective_step(params, samples, data):
-    loss_val = jax.vmap(model.objective_per_mc_sample, in_axes=(None, 0, None))(params, samples, data).mean()
-    return loss_val
-
 
 # Setup ADVI
 key = jax.random.split(key, 1)[0]
 n_iterations = 100
 n_mc_samples = 1000
 learning_rate = 0.1
-samples = model.epsilon_dist.sample(seed=key, sample_shape=(n_iterations, n_mc_samples))
-
-print(model.objective_per_mc_sample(params, samples[0, 0], data))
-print(objective_step(params, samples[0], data))
 
 # Optimize
-value_and_grad_fun = jax.jit(jax.value_and_grad(objective_step))
+value_and_grad_fun = jax.jit(jax.value_and_grad(model.objective_fun))
 tx = optax.adam(learning_rate=learning_rate)
 state = tx.init(params)
 for i in range(n_iterations):
-    value, grads = value_and_grad_fun(params, samples[0], data)
+    key = jax.random.PRNGKey(i)
+    epsilons = model.sample_epsilon(key=key, sample_shape=(n_mc_samples,))
+    value, grads = value_and_grad_fun(params, epsilons, data)
     updates, state = tx.update(grads, state)
     params = optax.apply_updates(params, updates)
 
@@ -77,7 +72,7 @@ for i in range(n_iterations):
     print(i, value)
 
     plt.figure()
-    noise_var = (jnp.exp(params["mean"][0]) ** 2) / 0.01
+    # noise_var = (jnp.exp(params["mean"][0]) ** 2) / 0.01
     # y_map = X @ (jnp.linalg.inv(X.T @ X + noise_var) @ X.T @ y_noisy)
     plt.scatter(X, y_noisy, label="noisy data", color="k")
     # plt.plot(X, y_map, label="MAP", color="k")

@@ -7,18 +7,23 @@ import matplotlib.pyplot as plt
 
 # Define prior distributions
 prior_dists = {
-    "theta": distrax.MultivariateNormalDiag(
-        jnp.array([0.2, 10.0]),
-        jnp.array([1.5, 2.5]),
+    "theta": lambda: distrax.MultivariateNormalFullCovariance(
+        jnp.array([1.0, 10.0]), jnp.array([[1.0, 0.2], [0.2, 1.0]])
     ),
 }
 
-# Transform prior distributions
-transforms = {"theta": lambda x: x}
+transforms = {"theta": lambda: distrax.Lambda(lambda x: x)}
 
 # Define log likelihood function
 def log_likelihood_fun(data, theta):
-    return 0.0
+    lik_dist = distrax.MultivariateNormalFullCovariance(theta["theta"], jnp.array([[1.0, 0.5], [0.5, 1.0]]))
+    return jax.vmap(lik_dist.log_prob)(data).sum()
+
+
+def likelihood_sample(key, theta):
+    key = jax.random.split(key, 1)[0]
+    lik_dist = distrax.MultivariateNormalFullCovariance(theta, jnp.array([[1.0, 0.0], [0.0, 1.0]]))
+    return lik_dist.sample(seed=key)
 
 
 # Define model
@@ -27,35 +32,32 @@ model = ADVI(prior_dists, transforms, log_likelihood_fun)
 # Initialize
 key = jax.random.PRNGKey(0)
 params = model.init(key, distrax.Normal(loc=0.0, scale=1.0))
-data = (None, None)
-
-# Define objective
-def objective_step(params, samples, data):
-    loss_val = jax.vmap(model.objective_per_mc_sample, in_axes=(None, 0, None))(params, samples, data)
-
-    return loss_val.mean()
-
+keys = jax.random.split(key, 1000)
+data = jax.vmap(lambda key: likelihood_sample(key, prior_dists["theta"]().sample(seed=key)))(keys)
 
 # Setup ADVI
 key = jax.random.split(key, 1)[0]
-n_iterations = 100
-n_mc_samples = 100
+n_iterations = 200
+n_mc_samples = 1000
 learning_rate = 0.1
-samples = model.epsilon_dist.sample(seed=key, sample_shape=(n_iterations, n_mc_samples))
-
-print(model.objective_per_mc_sample(params, samples[0, 0], data))
-print(objective_step(params, samples[0], data))
 
 # Optimize
-value_and_grad_fun = jax.value_and_grad(objective_step)
+sample_epsilon = jax.jit(model.sample_epsilon, static_argnums=1)
+value_and_grad_fun = jax.jit(jax.value_and_grad(model.objective_fun))
 tx = optax.adam(learning_rate=learning_rate)
 state = tx.init(params)
+losses = []
 for i in range(n_iterations):
-    value, grads = value_and_grad_fun(params, samples[i], data)
+    key = jax.random.PRNGKey(i)
+    epsilons = sample_epsilon(key=key, sample_shape=(n_mc_samples,))
+    value, grads = value_and_grad_fun(params, epsilons, data)
     updates, state = tx.update(grads, state)
     params = optax.apply_updates(params, updates)
 
-    print(value)
+    print(i, value)
+    losses.append(value)
+    print("means", params["mean"]["theta"])
+    print("scales", jnp.exp(params["log_scale"]["theta"]))
 
-print(params["mean"], jnp.exp(params["log_scale"]))
-print("Done")
+plt.plot(losses)
+plt.savefig("advi_bi.png")
