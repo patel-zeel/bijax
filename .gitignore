@@ -6,3 +6,4 @@ __pycache__/
 *.png
 *.egg-info/
 ajax/_version.py
+build
