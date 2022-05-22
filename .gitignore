@@ -5,4 +5,4 @@ __pycache__/
 *.jpg
 *.png
 *.egg-info/
-advi_jax/_version.py
+ajax/_version.py
