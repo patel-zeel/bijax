@@ -22,9 +22,8 @@ from .utils import seeds_like
 
 
 class Prior:
-    def __init__(self, distributions, bijectors):
+    def __init__(self, distributions):
         self.distributions = distributions
-        self.bijectors = bijectors
         self.guide = {key: 0 for key in self.distributions}
 
     def log_prob(self, sample):
@@ -48,7 +47,7 @@ class Likelihood:
         return self.likelihood(**likelihood_params)
 
     def sample(self, seed, params, sample_shape):
-        likelihood = self.get_dist(params)
+        likelihood = self.get_likelihood(params)
         return likelihood.sample(seed=seed, sample_shape=sample_shape)
 
     def log_prob(self, params, data):
@@ -57,91 +56,80 @@ class Likelihood:
 
 
 class Variational:
-    def __init__(self, prior, vi_type="full_rank"):
+    def __init__(self, prior, bijectors, vi_type="full_rank"):
         self.prior = prior
+        self.bijectors = bijectors
         self.vi_type = vi_type
 
+        # dummy pytree to help vectorization with tree_map
         self.guide = {key: 0 for key in self.prior.distributions.keys()}
-        self.distribution = jax.tree_map(
-            lambda _, dist, bijector: self.get_variational(dist, bijector),
-            self.guide,
-            self.prior.distributions,
-            self.prior.bijectors,
+
+        # bijectors for mean and variance of the variational distribution
+        if vi_type == "mean_field":
+            self.params_transforms = [tfb.Identity().forward, tfb.Exp().forward]
+        elif vi_type == "full_rank":
+            self.params_transforms = [tfb.Identity().forward, tfb.Identity().forward]
+
+        # initialize shapes
+        def get_shape(dist):
+            return tuple(dist.batch_shape.as_list() + dist.event_shape.as_list())
+
+        def get_flat_shape(dist):
+            if isinstance(dist, tfd.CholeskyLKJ):
+                assert dist.batch_shape.as_list() == [], "CholeskyLKJ multi-batch is not supported"
+                return (dist.event_shape[0] * (dist.event_shape[0] - 1)) // 2
+            return reduce(lambda a, b: a * b, get_shape(dist))
+
+        self.shapes = jax.tree_map(lambda _, dist: get_shape(dist), self.guide, self.prior.distributions)
+        self.flat_shapes = jax.tree_map(lambda _, dist: get_flat_shape(dist), self.guide, self.prior.distributions)
+        self.params = self.init_params()
+
+    def init_params(self):
+        def get_variational(bijector, flat_shape):
+            if self.vi_type == "mean_field":
+                normal_dist = tfd.MultivariateNormalDiag(loc=jnp.zeros(flat_shape), scale_diag=jnp.ones(flat_shape))
+            elif self.vi_type == "full_rank":
+                normal_dist = tfd.MultivariateNormalTriL(loc=jnp.zeros(flat_shape), scale_tril=jnp.eye(flat_shape))
+            return tfd.TransformedDistribution(normal_dist, bijector)
+
+        return jax.tree_map(
+            lambda flat_shape, bijector: get_variational(bijector, flat_shape), self.flat_shapes, self.bijectors
         )
 
-    def get_variational(self, dist, bijector):  # Call only once
-        seed = jax.random.PRNGKey(0)
-        sample = dist.sample(seed=seed)
-        shape = sample.shape
-        if isinstance(dist, tfd.CholeskyLKJ):
-            dim = shape[0] * (shape[0] - 1) // 2
-        else:
-            dim = reduce(lambda x, y: x * y, shape)
-        flat_shape = (dim,)
-
-        if self.vi_type == "mean_field":
-            params = {"loc": jnp.zeros(flat_shape), "scale_diag": jnp.ones(flat_shape)}
-            params_transforms = [tfb.Identity().foward, tfb.Exp().forward]
-            normal_dist = tfd.MultivariateNormalDiag
-        elif self.vi_type == "full_rank":
-            params = {"loc": jnp.zeros(flat_shape), "scale_tril": jnp.ones(dim * (dim + 1) // 2)}
-            params_transforms = [tfb.Identity().forward, tfp.math.fill_triangular]
-            normal_dist = tfd.MultivariateNormalTriL
-
-        transformed_params = jax.tree_map(lambda param, transform: transform(param), params, params_transforms)
-        dist = normal_dist(**transformed_params)
-        transformed_dist = tfd.TransformedDistribution(dist, bijector)
-        return {
-            "shape": shape,
-            "params": params,
-            "revert_shape": flat_shape,
-            "params_transforms": params_transforms,
-            "transformed_dist": transformed_dist,
-        }
-
-    def _sample_dist(self, dist_dict, seed, sample_shape=()):
-        sample = dist_dict["transformed_dist"].sample(seed=seed, sample_shape=sample_shape)
-        final_shape = sample_shape + dist_dict["shape"]
-        return sample.reshape(final_shape)
+    def transform_dist(self, dist):
+        values, treedef = jax.tree_flatten(dist)
+        values = jax.tree_map(lambda value, transform: transform(value), values, self.params_transforms)
+        return jax.tree_unflatten(treedef, values)
 
     def sample(self, seed, sample_shape=()):
-        seeds = seeds_like(seed, self.guide)
-        sample = jax.tree_map(
-            lambda seed, dist_dict: self._sample_dist(dist_dict, seed, sample_shape), seeds, self.distribution
-        )
-        return sample
+        def sample_dist(seed, dist, sample_shape, shape):
+            dist = self.transform_dist(dist)
+            sample = dist.sample(seed=seed, sample_shape=sample_shape)
+            final_shape = sample_shape + shape
+            return sample.reshape(final_shape)
 
-    def _log_prob_dist(self, dist_dict, sample):
-        sample = sample.reshape(dist_dict["revert_shape"])
-        return dist_dict["transformed_dist"].log_prob(sample)
+        seeds = seeds_like(seed, self.guide)
+        return jax.tree_map(
+            lambda seed, dist, shape: sample_dist(seed, dist, sample_shape, shape), seeds, self.params, self.shapes
+        )
 
     def log_prob(self, sample):
+        def log_prob_dist(dist, sample, flat_shape):
+            if not isinstance(dist.bijector, tfb.CorrelationCholesky):
+                sample = sample.reshape(flat_shape)
+            dist = self.transform_dist(dist)
+            return dist.log_prob(sample)
+
         log_probs = jax.tree_map(
-            lambda _, dist_dict, tmp_sample: self._log_prob_dist(dist_dict, tmp_sample),
-            self.guide,
-            self.distribution,
+            lambda tmp_sample, dist, flat_shape: log_prob_dist(dist, tmp_sample, flat_shape),
             sample,
+            self.params,
+            self.flat_shapes,
         )
         return sum(jax.tree_leaves(log_probs))
 
-    def sample_and_log_prob(self, seed, sample_shape):
-        sample = self.sample(seed=seed, sample_shape=sample_shape)
-        log_prob = jax.vmap(self.log_prob)(sample)
-        return sample, log_prob
-
-    def update_dist(self, dist_dict, params):
-        transformed_params = jax.tree_map(
-            lambda param, transform: transform(param), params, dist_dict["params_transforms"]
-        )
-        tree_def = jax.tree_structure(dist_dict["transformed_dist"])
-        transformed_dist = jax.tree_unflatten(tree_def, jax.tree_leaves(transformed_params))
-        dist_dict["transformed_dist"] = transformed_dist
+    def get_params(self):
+        return jax.tree_map(lambda x: x, self.params)
 
     def set_params(self, params):
-        # ToDo: check if params matches required shape
-        jax.tree_map(lambda _, dist_dict, param: self.update_dist, self.guide, self.distribution, params)
-        jax.tree_map(lambda _, x, param: x.update({"params": param}), self.guide, self.distribution, params)
-
-    def get_params(self):
-        params = jax.tree_map(lambda _, x: x["params"], self.guide, self.distribution)
-        return jax.tree_map(lambda x: x, params)  # Returns a copy
+        self.params = params

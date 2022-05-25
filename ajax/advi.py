@@ -12,13 +12,15 @@ class ADVI:
 
     def loss(self, params, prior, likelihood, variational, data, n_samples, seed):
         variational.set_params(params)
-        params = variational.get_params()
+        # params = variational.get_params()
         # return jnp.concatenate(jax.tree_leaves(params)).sum()**2
-        sample, q_log_prob = variational.sample_and_log_prob(seed, sample_shape=(n_samples,))
-        return sample["mean"].sum() ** 2
-        # p_log_prob = jax.vmap(prior.log_prob)(sample)
-        # log_likelihood = jax.vmap(likelihood.log_prob, in_axes=(0, None))(sample, data)
-        # return jnp.mean(q_log_prob - p_log_prob - log_likelihood)
+        sample = variational.sample(seed, sample_shape=(n_samples,))
+        # return sample["mean"].sum() ** 2
+        q_log_prob = jax.vmap(variational.log_prob)(sample)
+        p_log_prob = jax.vmap(prior.log_prob)(sample)
+        log_likelihood = jax.vmap(likelihood.log_prob, in_axes=(0, None))(sample, data)
+        print(q_log_prob, p_log_prob)
+        return jnp.mean(q_log_prob - p_log_prob - log_likelihood)
 
     def value_and_grad(self, params, n_samples=1, seed=None):
         value_and_grad_fun = jax.value_and_grad(self.loss)

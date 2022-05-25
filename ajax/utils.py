@@ -8,6 +8,7 @@ def seeds_like(seed, params):
 
 def fill_params(seed, params, initializer):
     assert seed is not None
-    seeds = seeds_like(seed, params)
-    params = jax.tree_map(lambda seed, param: initializer(seed, (len(param),)), seeds, params)
-    return params
+    values, treedef = jax.tree_flatten(params)
+    seeds = seeds_like(seed, values)
+    values = jax.tree_map(lambda seed, value: initializer(seed, value.shape), seeds, values)
+    return jax.tree_unflatten(treedef, values)
