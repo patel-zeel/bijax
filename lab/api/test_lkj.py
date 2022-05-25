@@ -8,7 +8,7 @@ import distrax
 
 tfd = tfp.distributions
 
-from ajax.base import Prior, Variational
+from ajax.base2 import Prior, Variational
 
 # generate data
 N = 1000

@@ -10,7 +10,7 @@ import distrax
 tfd = tfp.distributions
 import optax
 
-from ajax.base import Prior, Variational
+from ajax.base2 import Prior, Variational
 
 # generate data
 N = 100
