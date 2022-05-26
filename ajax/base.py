@@ -30,7 +30,7 @@ class Prior:
         log_probs = jax.tree_map(lambda value, dist: dist.log_prob(value), sample, self.distributions)
         return sum(jax.tree_leaves(log_probs))
 
-    def sample(self, seed, sample_shape=None):
+    def sample(self, seed, sample_shape=()):
         seeds = seeds_like(seed, self.guide)
         return jax.tree_map(
             lambda seed, dist: dist.sample(seed=seed, sample_shape=sample_shape), seeds, self.distributions
