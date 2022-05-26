@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 *.jpg
 *.png
+*.gif
 *.egg-info/
 ajax/_version.py
 build

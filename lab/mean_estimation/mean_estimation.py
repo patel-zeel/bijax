@@ -44,6 +44,20 @@ def link_function(sample):
     return {"loc": loc, "scale_tril": scale_tril}
 
 
+def logprob(sample, data=data):
+    likelihood = Likelihood(tfd.MultivariateNormalTriL, link_function)
+    prior = Prior(
+        distributions={
+            "mean": tfd.MultivariateNormalDiag(loc=jnp.array([0.0, 0.0]), scale_diag=jnp.array([1.5, 1.5])),
+            "corr": tfd.CholeskyLKJ(dimension=2, concentration=2.0),
+            "sigma": tfd.Independent(tfd.Exponential(rate=[0.1, 0.1]), reinterpreted_batch_ndims=1),
+        }
+    )
+    log_likelihood = likelihood.log_prob(sample, data)
+    log_prior = prior.log_prob(sample)
+    return log_likelihood + log_prior
+
+
 likelihood = Likelihood(tfd.MultivariateNormalTriL, link_function)
 
 # define variational
@@ -68,7 +82,7 @@ params = fill_params(seed, params, jax.random.normal)
 tx = optax.adam(learning_rate=0.1)
 state = tx.init(params)
 
-value_and_grad_fun = jax.jit(advi.value_and_grad, static_argnames=["prior", "likelihood", "variational", "n_samples"])
+value_and_grad_fun = jax.jit(jax.value_and_grad(advi.loss), static_argnames=["n_samples"])
 
 vals = []
 

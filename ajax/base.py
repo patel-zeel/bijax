@@ -52,7 +52,7 @@ class Likelihood:
 
     def log_prob(self, params, data):
         likelihood = self.get_likelihood(params)
-        return jnp.sum(jax.vmap(likelihood.log_prob)(data))
+        return jnp.sum(likelihood.log_prob(data))
 
 
 class Variational:
