@@ -5,11 +5,5 @@ This repo contains the ADVI implementation in JAX. The original paper is [here](
 ### Installation
 
 ```
-pip install advi_jax
+pip install git+https://github.com/patel-zeel/ajax.git
 ```
-
-### Brain storming
-
-* We may be able to use normal functions instead of distrax.bijector by inverting the jacobian.
-* distrax bijectors have forward method and inverse method.
-* vmap works on pytrees with vector values and functions with pytree outputs.
