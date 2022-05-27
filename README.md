@@ -7,3 +7,8 @@ This repo contains the ADVI implementation in JAX. The original paper is [here](
 ```
 pip install git+https://github.com/patel-zeel/ajax.git
 ```
+
+### Basic usage
+```py
+from ajax import Prior, Likelihood, Variational, ADVI
+```
