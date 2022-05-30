@@ -66,9 +66,12 @@ class Variational:
 
         # bijectors for mean and variance of the variational distribution
         if vi_type == "mean_field":
+            # Be cautious with the order of the bijectors
             self.params_transforms = [tfb.Identity().forward, tfb.Exp().forward]
         elif vi_type == "full_rank":
             self.params_transforms = [tfb.Identity().forward, tfb.Identity().forward]
+        else:
+            raise ValueError(f"Unknown vi_type {vi_type}")
 
         # initialize shapes
         def get_shape(dist):
@@ -78,7 +81,10 @@ class Variational:
             if isinstance(dist, tfd.CholeskyLKJ):
                 assert dist.batch_shape.as_list() == [], "CholeskyLKJ multi-batch is not supported"
                 return (dist.event_shape[0] * (dist.event_shape[0] - 1)) // 2
-            return reduce(lambda a, b: a * b, get_shape(dist))
+            shape = get_shape(dist)
+            if shape == ():
+                return 1
+            return reduce(lambda a, b: a * b, shape)
 
         self.shapes = jax.tree_map(lambda _, dist: get_shape(dist), self.guide, self.prior.distributions)
         self.flat_shapes = jax.tree_map(lambda _, dist: get_flat_shape(dist), self.guide, self.prior.distributions)
@@ -93,7 +99,10 @@ class Variational:
             return tfd.TransformedDistribution(normal_dist, bijector)
 
         return jax.tree_map(
-            lambda flat_shape, bijector: get_variational(bijector, flat_shape), self.flat_shapes, self.bijectors
+            lambda _, flat_shape, bijector: get_variational(bijector, flat_shape),
+            self.guide,
+            self.flat_shapes,
+            self.bijectors,
         )
 
     def transform_dist(self, dist):

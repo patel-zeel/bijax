@@ -93,11 +93,11 @@ plt.plot(vals[50:])
 plt.savefig("losses.png")
 
 plt.figure()
-plt.scatter(data[:, 0], data[:, 1], label="gt")
+plt.scatter(data[:, 0], data[:, 1], label="gt", alpha=0.5)
 variational.set_params(params)
 sample = variational.sample(seed)
 seed = jax.random.split(seed, 1)[0]
 samples = likelihood.sample(seed, sample, sample_shape=(10000,))
-plt.scatter(samples[:, 0], samples[:, 1], label="posterior")
+plt.scatter(samples[:, 0], samples[:, 1], label="posterior", alpha=0.5)
 plt.legend()
 plt.savefig("posterior.png")
