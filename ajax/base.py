@@ -49,7 +49,7 @@ class Likelihood:
         likelihood_params = self.get_likelihood_params(params)
         return self.likelihood(**likelihood_params)
 
-    def sample(self, seed, params, sample_shape):
+    def sample(self, seed, params, sample_shape=()):
         likelihood = self.get_likelihood(params)
         return likelihood.sample(seed=seed, sample_shape=sample_shape)
 
