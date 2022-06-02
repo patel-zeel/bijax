@@ -38,12 +38,15 @@ class Prior:
 
 
 class Likelihood:
-    def __init__(self, likelihood, link_function):
+    def __init__(self, likelihood, get_likelihood_params=None):
         self.likelihood = likelihood
-        self.link_function = link_function
+        if get_likelihood_params is None:
+            self.get_likelihood_params = lambda params: params
+        else:
+            self.get_likelihood_params = get_likelihood_params
 
     def get_likelihood(self, params):
-        likelihood_params = self.link_function(params)
+        likelihood_params = self.get_likelihood_params(params)
         return self.likelihood(**likelihood_params)
 
     def sample(self, seed, params, sample_shape):
@@ -67,9 +70,9 @@ class Variational:
         # bijectors for mean and variance of the variational distribution
         if vi_type == "mean_field":
             # Be cautious with the order of the bijectors
-            self.params_transforms = [tfb.Identity().forward, tfb.Exp().forward]
+            self.params_transforms = [lambda x: x, jnp.exp]
         elif vi_type == "full_rank":
-            self.params_transforms = [tfb.Identity().forward, tfb.Identity().forward]
+            self.params_transforms = [lambda x: x, lambda x: x]
         else:
             raise ValueError(f"Unknown vi_type {vi_type}")
 
@@ -125,7 +128,7 @@ class Variational:
     def log_prob(self, sample):
         def log_prob_dist(dist, sample, flat_shape):
             if not isinstance(dist.bijector, tfb.CorrelationCholesky):
-                sample = sample.reshape(flat_shape)
+                sample = sample.reshape(-1, flat_shape)
             dist = self.transform_dist(dist)
             return dist.log_prob(sample)
 

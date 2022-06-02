@@ -51,7 +51,7 @@ likelihood = Likelihood(tfd.MultivariateNormalTriL, link_function)
 variational = Variational(
     prior=prior,
     bijectors={"mean": tfb.Identity(), "corr": tfb.CorrelationCholesky(), "sigma": tfb.Exp()},
-    vi_type="full_rank",
+    vi_type="mean_field",
 )
 
 # Define ADVI
