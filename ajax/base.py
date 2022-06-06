@@ -68,11 +68,14 @@ class Variational:
         self.guide = {key: 0 for key in self.prior.distributions.keys()}
 
         # bijectors for mean and variance of the variational distribution
+        def identity(x):
+            return x
+
         if vi_type == "mean_field":
             # Be cautious with the order of the bijectors
-            self.params_transforms = [lambda x: x, jnp.exp]
+            self.params_transforms = [identity, jnp.exp]
         elif vi_type == "full_rank":
-            self.params_transforms = [lambda x: x, lambda x: x]
+            self.params_transforms = [identity, identity]
         else:
             raise ValueError(f"Unknown vi_type {vi_type}")
 
