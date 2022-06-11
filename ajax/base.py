@@ -63,19 +63,18 @@ class Variational:
         self.prior = prior
         self.bijectors = bijectors
         self.vi_type = vi_type
+        # self.distribution = tfd.Normal(loc=0, scale=1)
 
         # dummy pytree to help vectorization with tree_map
         self.guide = {key: 0 for key in self.prior.distributions.keys()}
 
         # bijectors for mean and variance of the variational distribution
-        def identity(x):
-            return x
 
         if vi_type == "mean_field":
             # Be cautious with the order of the bijectors
-            self.params_transforms = [identity, jnp.exp]
+            self.params_transforms = [tfb.Identity(), tfb.Exp()]
         elif vi_type == "full_rank":
-            self.params_transforms = [identity, identity]
+            self.params_transforms = [tfb.Identity(), tfb.Identity()]
         else:
             raise ValueError(f"Unknown vi_type {vi_type}")
 
@@ -148,3 +147,4 @@ class Variational:
 
     def set_params(self, params):
         self.params = params
+
