@@ -1,6 +1,6 @@
 ## AJAX
 
-This repo contains several approximate Bayesian inference algorithms implemented in JAX. The original paper is [here](https://www.jmlr.org/papers/volume18/16-107/16-107.pdf).
+This repo contains several approximate Bayesian inference algorithms implemented in JAX.
 
 ### Installation
 
