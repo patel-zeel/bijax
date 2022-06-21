@@ -12,3 +12,7 @@ pip install git+https://github.com/patel-zeel/ajax.git
 ```py
 from ajax import Prior, Likelihood, Variational, ADVI
 ```
+
+### Core Principals
+
+* Each component in prior should return a single scalar `log_prob`.

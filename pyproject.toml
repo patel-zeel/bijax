@@ -13,3 +13,7 @@ write_to = "ajax/_version.py"
 
 [tool.black]
 line-length = 120
+
+[tool.pytest.ini_options]
+python_files = "*_test.py"
+python_functions = "*_test"
