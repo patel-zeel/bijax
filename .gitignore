@@ -8,3 +8,4 @@ __pycache__/
 *.egg-info/
 ajax/_version.py
 build
+tmp.py
