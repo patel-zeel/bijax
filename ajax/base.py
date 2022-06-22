@@ -27,14 +27,15 @@ class Posterior:
     def __init__(self, posterior, approx_normal_prior, bijector):
         assert isinstance(posterior, tfd.Distribution)
         self.posterior = posterior
-        self.unravel_fn = get_normal_posterior_size_and_unravel_fn(approx_normal_prior)[1]
+        self.approx_normal_prior = approx_normal_prior
         self.bijector = bijector
 
     def sample(self, seed, sample_shape=()):
         sample = self.posterior.sample(seed=seed, sample_shape=sample_shape)
+        unravel_fn = get_normal_posterior_size_and_unravel_fn(self.approx_normal_prior)[1]
 
         def f(x):
-            return transform_tree(self.dill_unravel.function(x), self.bijector)
+            return transform_tree(unravel_fn(x), self.bijector)
 
         for _ in range(len(sample_shape)):
             f = jax.vmap(f)
