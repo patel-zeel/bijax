@@ -49,6 +49,9 @@ class ADVI:
 
         self.prior = prior
         self.check_prior_zero_batch()  # Assert that the prior distribution has no batch dimension.
+        assert (vi_type == "low_rank") == (
+            rank is not None
+        ), "`rank` must be specified only if `vi_type` is `low_rank`."
 
         self.bijector = bijector
         self.get_log_likelihood = get_log_likelihood
