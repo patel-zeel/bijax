@@ -24,10 +24,10 @@ from .utils import seeds_like
 
 
 class Posterior:
-    def __init__(self, posterior, unravel_fn, bijector):
+    def __init__(self, posterior, dill_unravel, bijector):
         assert isinstance(posterior, tfd.Distribution)
         self.posterior = posterior
-        self.unravel_fn = unravel_fn
+        self.unravel_fn = dill_unravel.function
         self.bijector = bijector
 
     def sample(self, seed, sample_shape=()):

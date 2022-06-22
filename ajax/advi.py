@@ -1,4 +1,5 @@
 import jax
+import dill
 
 from .base import (
     inverse_transform_dist,
@@ -16,6 +17,17 @@ from .utils import initialize_params
 import tensorflow_probability.substrates.jax as tfp
 
 tfd = tfp.distributions
+
+
+class DillPickle:
+    def __init__(self, function):
+        self.function = function
+
+    def __getstate__(self):
+        return dill.dumps(self.function)
+
+    def __setstate__(self, state):
+        self.function = dill.loads(state)
 
 
 class ADVI:
@@ -97,4 +109,5 @@ class ADVI:
     def apply(self, params):
         posterior = params["posterior"]
         posterior = transform_dist_params(posterior, self.posterior_params_bijector)
-        return Posterior(posterior, self.unravel_fn, self.bijector)
+        dill_unravel = DillPickle(self.unravel_fn)
+        return Posterior(posterior, dill_unravel, self.bijector)
