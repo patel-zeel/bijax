@@ -20,9 +20,12 @@ import tensorflow_probability.substrates.jax as tfp
 tfd = tfp.distributions
 tfb = tfp.bijectors
 
+from .utils import seeds_like
+
 
 class Posterior:
     def __init__(self, posterior, unravel_fn, bijector):
+        assert isinstance(posterior, tfd.Distribution)
         self.posterior = posterior
         self.unravel_fn = unravel_fn
         self.bijector = bijector
@@ -140,37 +143,3 @@ def get_full_rank(approx_normal_prior, ordered_posterior_bijectors=None):
         unravel_fn,
         ordered_posterior_bijectors,
     )
-
-
-def seeds_like(params, seed, is_leaf=None):
-    """Generate seeds for a tree of parameters.
-
-    Args:
-        params: parameters.
-        seed: JAX PRNGKey.
-        is_leaf: same as `jax.tree_map`.
-
-    Returns:
-        seeds: JAX PRNGKeys for the tree of parameters.
-    """
-    values, treedef = jax.tree_flatten(params, is_leaf=is_leaf)
-    return jax.tree_unflatten(treedef, jax.random.split(seed, len(values)))
-
-
-def initialize_params(params, seed, initializer):
-    """Initialize parameters with a given initializer.
-
-    Args:
-        seed: JAX PRNGKey
-        params: parameters to initialize
-        initializer: one of the jax.nn.initializers or a callable that takes a PRNGKey and shape and returns DeviceArray.
-                     example: jax.nn.initializers.normal(stddev=0.1)
-                     example: lambda seed, shape: jax.random.uniform(seed, shape, minval=0, maxval=1)
-                     example: lambda seed, shape: jnp.zeros(shape)
-
-    Returns:
-        DeviceArray: initialized parameters
-    """
-    values, unravel_fn = ravel_pytree(params)
-    random_values = initializer(seed, (len(values),))
-    return unravel_fn(random_values)

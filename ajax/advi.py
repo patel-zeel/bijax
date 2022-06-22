@@ -2,7 +2,6 @@ import jax
 
 from .base import (
     inverse_transform_dist,
-    initialize_params,
     transform_tree,
     transform_dist_params,
     log_prob_dist,
@@ -12,6 +11,11 @@ from .base import (
 )
 
 from .base import Posterior
+from .utils import initialize_params
+
+import tensorflow_probability.substrates.jax as tfp
+
+tfd = tfp.distributions
 
 
 class ADVI:
@@ -44,6 +48,8 @@ class ADVI:
         assert bijector.keys() == prior.keys(), "The keys in `prior` and `bijector` must be the same."
 
         self.prior = prior
+        self.check_prior_zero_batch()  # Assert that the prior distribution has no batch dimension.
+
         self.bijector = bijector
         self.get_log_likelihood = get_log_likelihood
         self.vi_type = vi_type
@@ -63,10 +69,16 @@ class ADVI:
                 self.approx_normal_prior, ordered_posterior_bijectors
             )
 
-    def init(self, seed, initializer=jax.nn.initializers.normal()):
-        return initialize_params(self.posterior, seed, initializer)
+    def check_prior_zero_batch(self):
+        is_leaf = lambda x: isinstance(x, tfd.Distribution)
+        batch_lens = jax.tree_map(lambda x: len(x.batch_shape), self.prior, is_leaf=is_leaf)
+        assert sum(jax.tree_leaves(batch_lens)) == 0, "The prior distributions must have no batch dimension."
 
-    def loss_fn(self, posterior, batch, aux, data_size, seed, n_samples=1):
+    def init(self, seed, initializer=jax.nn.initializers.normal()):
+        return {"posterior": initialize_params(self.posterior, seed, initializer)}
+
+    def loss_fn(self, params, batch, aux, data_size, seed, n_samples=1):
+        posterior = params["posterior"]
         posterior = transform_dist_params(posterior, self.posterior_params_bijector)
 
         def loss_fn_per_sample(seed):
@@ -75,13 +87,14 @@ class ADVI:
             sample_tree = self.unravel_fn(sample)
             p_log_prob = log_prob_dist(self.approx_normal_prior, sample_tree)
             transformed_sample_tree = transform_tree(sample_tree, self.bijector)
-            log_likelihood = self.get_log_likelihood(transformed_sample_tree, aux, batch)
+            log_likelihood = self.get_log_likelihood(transformed_sample_tree, aux, batch, **params)
             log_likelihood = (log_likelihood / len(batch)) * data_size  # normalize by data size
             return (q_log_prob - p_log_prob - log_likelihood) / data_size
 
         seeds = jax.random.split(seed, n_samples)
         return jax.vmap(loss_fn_per_sample)(seeds).mean()
 
-    def apply(self, posterior):
+    def apply(self, params):
+        posterior = params["posterior"]
         posterior = transform_dist_params(posterior, self.posterior_params_bijector)
         return Posterior(posterior, self.unravel_fn, self.bijector)
