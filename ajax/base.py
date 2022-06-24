@@ -157,3 +157,16 @@ def get_full_rank(approx_normal_prior, ordered_posterior_bijectors=None):
         unravel_fn,
         ordered_posterior_bijectors,
     )
+
+
+def check_distribution_zero_batch(dist_pytree):
+    is_leaf = lambda x: isinstance(x, tfd.Distribution)
+
+    def len_of_batch(dist):
+        if isinstance(dist, tfd.Distribution):
+            return len(dist.batch_shape)
+        elif callable(dist):
+            return 0
+
+    batch_lens = jax.tree_map(lambda dist: len_of_batch(dist), dist_pytree, is_leaf=is_leaf)
+    assert sum(jax.tree_leaves(batch_lens)) == 0, "The prior distributions must not have any batch dimension."

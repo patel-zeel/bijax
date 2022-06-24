@@ -8,6 +8,7 @@ from .base import (
     get_full_rank,
     get_low_rank,
     get_mean_field,
+    check_distribution_zero_batch,
 )
 
 from .base import Posterior
@@ -20,7 +21,7 @@ tfd = tfp.distributions
 
 class ADVI:
     def __init__(
-        self, prior, bijector, get_log_likelihood, vi_type="mean_field", rank=None, ordered_posterior_bijectors=None
+        self, prior, bijector, log_likelihood_fn, vi_type="mean_field", rank=None, ordered_posterior_bijectors=None
     ):
         """Automatic Differentiation Variational Inference
         A model class that implements the ADVI algorithm.
@@ -28,7 +29,7 @@ class ADVI:
         Args:
             prior (dict): A dictionary of prior distributions.
             bijector (dict): A dictionary of bijectors. The keys should be the same as the keys in `prior`.
-            get_log_likelihood (function): A function that returns log likelihood of data. The function should take two arguments: `likelihood_params` and `aux`.
+            log_likelihood_fn (function): A function that returns log likelihood of data. The function should take two arguments: `likelihood_params` and `aux`.
                                           example:
                                             prior = {"p_of_head": tfd.Beta(0.5, 0.5)}
                                             seed = jax.random.PRNGKey(0)
@@ -46,15 +47,16 @@ class ADVI:
         """
 
         assert bijector.keys() == prior.keys(), "The keys in `prior` and `bijector` must be the same."
+        check_distribution_zero_batch(prior)  # Assert that the prior distribution has no batch dimension.
 
         self.prior = prior
-        self.check_prior_zero_batch()  # Assert that the prior distribution has no batch dimension.
+
         assert (vi_type == "low_rank") == (
             rank is not None
         ), "`rank` must be specified only if `vi_type` is `low_rank`."
 
         self.bijector = bijector
-        self.get_log_likelihood = get_log_likelihood
+        self.log_likelihood_fn = log_likelihood_fn
         self.vi_type = vi_type
 
         self.approx_normal_prior = inverse_transform_dist(self.prior, self.bijector)
@@ -72,11 +74,6 @@ class ADVI:
                 self.approx_normal_prior, ordered_posterior_bijectors
             )
 
-    def check_prior_zero_batch(self):
-        is_leaf = lambda x: isinstance(x, tfd.Distribution)
-        batch_lens = jax.tree_map(lambda x: len(x.batch_shape), self.prior, is_leaf=is_leaf)
-        assert sum(jax.tree_leaves(batch_lens)) == 0, "The prior distributions must have no batch dimension."
-
     def init(self, seed, initializer=jax.nn.initializers.normal()):
         return {"posterior": initialize_params(self.posterior, seed, initializer)}
 
@@ -90,7 +87,9 @@ class ADVI:
             sample_tree = self.unravel_fn(sample)
             p_log_prob = log_prob_dist(self.approx_normal_prior, sample_tree)
             transformed_sample_tree = transform_tree(sample_tree, self.bijector)
-            log_likelihood = self.get_log_likelihood(transformed_sample_tree, aux, batch, **params)
+            log_likelihood = self.log_likelihood_fn(
+                latent_sample=transformed_sample_tree, data=batch, aux=aux, **params
+            )
             log_likelihood = (log_likelihood / len(batch)) * data_size  # normalize by data size
             return (q_log_prob - p_log_prob - log_likelihood) / data_size
 
