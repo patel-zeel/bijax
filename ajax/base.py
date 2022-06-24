@@ -78,11 +78,24 @@ def sample_dist(dist_pytree, seed, sample_shape=()):
 
 
 def log_prob_dist(dist_pytree, sample_pytree):
-    def is_leaf(dist):
+    def is_leaf_dist(dist):
         return isinstance(dist, tfd.Distribution)
 
-    log_probs = jax.tree_map(lambda dist, sample: dist.log_prob(sample), dist_pytree, sample_pytree, is_leaf=is_leaf)
-    return ravel_pytree(log_probs)[0].sum()
+    def log_prob(dist, sample):
+        if isinstance(dist, tfd.Distribution):
+            return dist.log_prob(sample)
+        elif callable(dist):
+            var_names = dist.__code__.co_varnames
+            args = {var_name: sample_pytree[var_name] for var_name in var_names}
+            return dist(**args).log_prob(sample).sum()
+        else:
+            raise ValueError(f"Unknown type {type(dist)}")
+
+    log_probs = jax.tree_map(
+        lambda dist, sample: log_prob(dist, sample), dist_pytree, sample_pytree, is_leaf=is_leaf_dist
+    )
+
+    return sum(jax.tree_leaves(log_probs))
 
 
 def transform_tree(pytree, bijector_pytree):
