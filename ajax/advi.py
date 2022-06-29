@@ -29,14 +29,14 @@ class ADVI:
         Args:
             prior (dict): A dictionary of prior distributions.
             bijector (dict): A dictionary of bijectors. The keys should be the same as the keys in `prior`.
-            log_likelihood_fn (function): A function that returns log likelihood of data. The function should take two arguments: `likelihood_params` and `aux`.
+            log_likelihood_fn (function): A function that returns log likelihood of outputs. The function should take two arguments: `likelihood_params` and `inputs`.
                                           example:
                                             prior = {"p_of_head": tfd.Beta(0.5, 0.5)}
                                             seed = jax.random.PRNGKey(0)
                                             likelihood_params = sample_dist(prior, seed) # likelihood_params = {"p_of_head": 0.5}
-                                            def coin_toss_log_likelihood(likelihood_params, aux, data):
+                                            def coin_toss_log_likelihood(likelihood_params, outputs, inputs):
                                                 p_of_head = likelihood_params["p_of_head"]
-                                                return tfd.Bernoulli(probs=p_of_head).log_prob(data)
+                                                return tfd.Bernoulli(probs=p_of_head).log_prob(outputs)
 
             vi_type (str, optional): type of variational inference ("mean_field", "full_rank", "low_rank"). Defaults to "mean_field".
             rank (int, optional): Rank of posterior covariance matrix in case where `vi_type` is "low_rank". Defaults to None.
@@ -77,7 +77,7 @@ class ADVI:
     def init(self, seed, initializer=jax.nn.initializers.normal()):
         return {"posterior": initialize_params(self.posterior, seed, initializer)}
 
-    def loss_fn(self, params, batch, aux, data_size, seed, n_samples=1):
+    def loss_fn(self, params, outputs, inputs, full_data_size, seed, n_samples=1):
         posterior = params["posterior"]
         posterior = transform_dist_params(posterior, self.posterior_params_bijector)
 
@@ -88,10 +88,10 @@ class ADVI:
             p_log_prob = log_prob_dist(self.approx_normal_prior, sample_tree)
             transformed_sample_tree = transform_tree(sample_tree, self.bijector)
             log_likelihood = self.log_likelihood_fn(
-                latent_sample=transformed_sample_tree, data=batch, aux=aux, **params
+                latent_sample=transformed_sample_tree, outputs=outputs, inputs=inputs, **params
             )
-            log_likelihood = (log_likelihood / len(batch)) * data_size  # normalize by data size
-            return (q_log_prob - p_log_prob - log_likelihood) / data_size
+            log_likelihood = (log_likelihood / len(outputs)) * full_data_size  # normalize by outputs size
+            return (q_log_prob - p_log_prob - log_likelihood) / full_data_size
 
         seeds = jax.random.split(seed, n_samples)
         return jax.vmap(loss_fn_per_sample)(seeds).mean()

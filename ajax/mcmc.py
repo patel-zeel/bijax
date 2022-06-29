@@ -23,7 +23,7 @@ class MCMC:
     def init(self, seed):
         return sample_dist(self.prior, seed)
 
-    def log_joint(self, params, batch, aux):
+    def log_joint(self, params, outputs, inputs):
         p_log_prob = log_prob_dist(self.prior, params)
-        log_likelihood = self.log_likelihood_fn(latent_sample=params, data=batch, aux=aux)
+        log_likelihood = self.log_likelihood_fn(latent_sample=params, outputs=outputs, inputs=inputs)
         return p_log_prob + log_likelihood

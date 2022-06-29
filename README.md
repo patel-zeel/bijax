@@ -75,27 +75,27 @@ bijector = {"weights": tfb.Identity()}
 Users have total freedom on how to define the log likelihood function adhering to several conditions. The log likelihood function should take the following arguments:
 
 * latent_sample: a dictionary of values that represents a sample taken from the latent (prior) parameter distributions. It will have same keys as the prior.
-* data: Data generated from the likelihood. We will find log probability of the `data` given the prior sample.
-* aux: Auxiliary data required to evaluate the likelihood. For example, in the Linear Regression problem, `X` is the auxiliary data. For the coin toss problem, `aux` is None.
+* outputs: Outputs generated from the likelihood. We will find log probability of the `outputs` given a latent sample.
+* inputs: Input data required to evaluate the likelihood. For example, in the Linear Regression problem, `X` is `inputs`. For the coin toss problem, `inputs` is None.
 * kwargs: We internally pass the trainable `params` as `kwargs` to the likelihood function. So, the user can mention additional learnable parameters in `kwargs` and they will be trained.
 
 For coin toss problem, we can define the log likelihood function as follows:
 
 ```python
-def log_likelihood_fn(latent_sample, data, aux, **kwargs):
+def log_likelihood_fn(latent_sample, outputs, inputs, **kwargs):
     p_of_heads = latent_sample["p_of_heads"]
-    log_likelihood = tfd.Bernoulli(probs=p_of_heads).log_prob(data).sum()
+    log_likelihood = tfd.Bernoulli(probs=p_of_heads).log_prob(outputs).sum()
     return log_likelihood
 ```
 
 For the Linear Regression problem with learnable noise variance, we can define the log likelihood function as follows:
 
 ```python
-def log_likelihood_fn(latent_sample, data, aux, **kwargs):
+def log_likelihood_fn(latent_sample, outputs, inputs, **kwargs):
     weights = latent_sample["weights"]
-    loc = jnp.dot(weights, aux["X"])
+    loc = jnp.dot(weights, inputs["X"])
     noise_variance = jnp.exp(kwargs["log_noise_scale"])
-    log_likelihood = tfd.MultivariateNormalDiag(loc=loc, scale_diag=noise_variance).log_prob(data).sum()
+    log_likelihood = tfd.MultivariateNormalDiag(loc=loc, scale_diag=noise_variance).log_prob(outputs).sum()
     return log_likelihood
 ```
 

@@ -42,7 +42,7 @@ class ADLaplace:
             assert param.ndim <= 1, "params must be scalar or vector"
         return params
 
-    def loss_fn(self, params, data, aux=None):
+    def loss_fn(self, params, outputs, inputs=None):
         transformed_params = jax.tree_map(lambda param, bijector: bijector.forward(param), params, self.bijectors)
         prior_log_probs = jax.tree_map(
             lambda param, dist: dist.log_prob(param),
@@ -50,16 +50,16 @@ class ADLaplace:
             self.approx_normal_distributions,
         )
 
-        def likelihood_log_prob(params, data, aux):
-            likelihood = self.get_likelihood(params, aux)
-            return likelihood.log_prob(data)
+        def likelihood_log_prob(params, outputs, inputs):
+            likelihood = self.get_likelihood(params, inputs)
+            return likelihood.log_prob(outputs)
 
-        likelihood_log_probs = jax.vmap(likelihood_log_prob, in_axes=(None, 0, 0))(transformed_params, data, aux)
+        likelihood_log_probs = jax.vmap(likelihood_log_prob, in_axes=(None, 0, 0))(transformed_params, outputs, inputs)
         loss = -(likelihood_log_probs.sum() + sum(jax.tree_leaves(prior_log_probs)))
         return loss
 
-    def apply(self, params, data, aux=None):
-        precision = jax.hessian(self.loss_fn)(params, data, aux)
+    def apply(self, params, outputs, inputs=None):
+        precision = jax.hessian(self.loss_fn)(params, outputs, inputs)
         event_shapes = jax.tree_map(lambda _, dist: dist.event_shape, self.guide, self.prior)
         return Posterior(params, precision, self.bijectors, event_shapes)
 
