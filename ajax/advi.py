@@ -85,7 +85,7 @@ class ADVI:
             sample = posterior.sample(seed=seed)
             q_log_prob = posterior.log_prob(sample)
             sample_tree = self.unravel_fn(sample)
-            p_log_prob = log_prob_dist(self.approx_normal_prior, sample_tree)
+            p_log_prob = log_prob_dist(self.approx_normal_prior, sample_tree).sum()  # sum over batch dimension
             transformed_sample_tree = transform_tree(sample_tree, self.bijector)
             log_likelihood = self.log_likelihood_fn(
                 latent_sample=transformed_sample_tree, outputs=outputs, inputs=inputs, **params
