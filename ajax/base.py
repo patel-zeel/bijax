@@ -87,7 +87,7 @@ def log_prob_dist(dist_pytree, sample_pytree):
         elif callable(dist):
             var_names = dist.__code__.co_varnames
             args = {var_name: sample_pytree[var_name] for var_name in var_names}
-            return dist(**args).log_prob(sample).sum()
+            return dist(**args).log_prob(sample)
         else:
             raise ValueError(f"Unknown type {type(dist)}")
 
@@ -95,7 +95,7 @@ def log_prob_dist(dist_pytree, sample_pytree):
         lambda dist, sample: log_prob(dist, sample), dist_pytree, sample_pytree, is_leaf=is_leaf_dist
     )
 
-    return sum(jax.tree_leaves(log_probs))
+    return ravel_pytree(log_probs)[0].sum()  # sum over batch dimension
 
 
 def transform_tree(pytree, bijector_pytree):
