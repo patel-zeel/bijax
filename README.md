@@ -1,25 +1,25 @@
-## AJAX
+## ABI_JAX
 
-A JAX library for approximate Bayesian inference.
+Approximate Bayesian Inference in JAX.
 
 ## Installation
 
 ```
-pip install git+https://github.com/patel-zeel/ajax.git
+pip install git+https://github.com/patel-zeel/abi_jax.git
 ```
 
-## Methods implemented in AJAX
+## Methods implemented in abi_jax
 
-* `from ajax.advi import ADVI` - [Automatic Differentiation Variational Inference](https://arxiv.org/abs/1603.00788)
-* `from ajax.laplace import ADLaplace` - Automatic Differentiation Laplace approximation.
-* `from ajax.mcmc import MCMC` - A helper class for external Markov Chain Monte Carlo (MCMC) sampling.
+* `from abi_jax.advi import ADVI` - [Automatic Differentiation Variational Inference](https://arxiv.org/abs/1603.00788)
+* `from abi_jax.laplace import ADLaplace` - Automatic Differentiation Laplace approximation.
+* `from abi_jax.mcmc import MCMC` - A helper class for external Markov Chain Monte Carlo (MCMC) sampling.
 
-## How to use AJAX?
+## How to use abi_jax?
 
-AJAX is built without too many layers of abstractions or some new conventions. Thus, it is also useful for educational purposes. If you like to directly dive into the examples, please refer to the [examples](examples) directory.
+abi_jax is built without too many layers of abstractions or some new conventions. Thus, it is also useful for educational purposes. If you like to directly dive into the examples, please refer to the [examples](examples) directory.
 
 
-There are a few core components of AJAX:
+There are a few core components of abi_jax:
 
 ### Prior
 `tensoflow_probability.substrates.jax` should be used to define the distributions for prior.
@@ -110,7 +110,7 @@ params = model.init(seed)
 ```
 
 ### Optimization
-Models in AJAX have `loss_fn` method which can be used to compute the loss. The loss can be optimized with any method that work with `JAX`. We also have a utility function `from ajax.utils import train` to train the model using `optax` optimizers.
+Models in abi_jax have `loss_fn` method which can be used to compute the loss. The loss can be optimized with any method that work with `JAX`. We also have a utility function `from abi_jax.utils import train` to train the model using `optax` optimizers.
 
 ### Get the posterior distribution
 Some of the models (`ADVI` and `ADLaplace`) support `.apply()` method to get the posterior distribution.
@@ -120,7 +120,3 @@ posterior = model.apply(params, ...)
 posterior.sample(...)
 posterior.log_prob(...)
 ```
-
-## Gotchas
-
-* Each component in prior should return a single scalar `log_prob`. Use `tfd.Independent` wherever required to ensure that each component of prior has no batch dimensions.

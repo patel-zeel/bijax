@@ -1,6 +1,6 @@
 import jax
 
-from .base import (
+from .core import (
     inverse_transform_dist,
     transform_tree,
     transform_dist_params,
@@ -10,7 +10,7 @@ from .base import (
     get_mean_field,
 )
 
-from .base import Posterior
+from .core import Posterior
 from .utils import initialize_params
 
 import tensorflow_probability.substrates.jax as tfp

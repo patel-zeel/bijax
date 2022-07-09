@@ -19,7 +19,7 @@ import tensorflow_probability.substrates.jax as tfp
 tfd = tfp.distributions
 tfb = tfp.bijectors
 
-from .base import seeds_like, inverse_transform_dist, Posterior, transform_dist_params
+from .core import seeds_like, inverse_transform_dist, Posterior, transform_dist_params
 
 
 class ADLaplace:

@@ -9,7 +9,7 @@ requires = [
 	]
 
 [tool.setuptools_scm]
-write_to = "ajax/_version.py"
+write_to = "abi_jax/_version.py"
 
 [tool.black]
 line-length = 120

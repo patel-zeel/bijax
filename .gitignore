@@ -8,6 +8,6 @@ __pycache__/
 *.gif
 *.txt
 *.egg-info/
-ajax/_version.py
+abi_jax/_version.py
 build
 tmp.py
