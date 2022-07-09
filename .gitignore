@@ -3,8 +3,10 @@ __pycache__/
 *.ipynb_checkpoints
 *.pyc
 *.jpg
+*.pdf
 *.png
 *.gif
+*.txt
 *.egg-info/
 ajax/_version.py
 build

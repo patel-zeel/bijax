@@ -8,7 +8,6 @@ from .base import (
     get_full_rank,
     get_low_rank,
     get_mean_field,
-    check_distribution_zero_batch,
 )
 
 from .base import Posterior
@@ -47,7 +46,7 @@ class ADVI:
         """
 
         assert bijector.keys() == prior.keys(), "The keys in `prior` and `bijector` must be the same."
-        check_distribution_zero_batch(prior)  # Assert that the prior distribution has no batch dimension.
+        # check_distribution_zero_batch(prior)  # Assert that the prior distribution has no batch dimension.
 
         self.prior = prior
 
@@ -91,7 +90,7 @@ class ADVI:
                 latent_sample=transformed_sample_tree, outputs=outputs, inputs=inputs, **params
             )
             log_likelihood = (log_likelihood / len(outputs)) * full_data_size  # normalize by outputs size
-            return (q_log_prob - p_log_prob - log_likelihood) / full_data_size
+            return q_log_prob - p_log_prob - log_likelihood
 
         seeds = jax.random.split(seed, n_samples)
         return jax.vmap(loss_fn_per_sample)(seeds).mean()
