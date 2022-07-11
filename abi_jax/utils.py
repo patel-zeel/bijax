@@ -3,7 +3,7 @@ from jax.flatten_util import ravel_pytree
 import optax
 
 
-def train(loss_fn, params, optimizer, n_epochs, seed, return_args={}):
+def train_fn(loss_fn, params, optimizer, n_epochs, seed, return_args={}):
     value_and_grad_fn = jax.value_and_grad(loss_fn)
     state = optimizer.init(params)
 
