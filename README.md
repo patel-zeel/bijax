@@ -1,25 +1,25 @@
-## ABI_JAX
+## BIJAX
 
-Approximate Bayesian Inference in JAX.
+Bayesian Inference in JAX.
 
 ## Installation
 
 ```
-pip install git+https://github.com/patel-zeel/abi_jax.git
+pip install git+https://github.com/patel-zeel/bijax.git
 ```
 
-## Methods implemented in abi_jax
+## Methods implemented in BIJAX
 
-* `from abi_jax.advi import ADVI` - [Automatic Differentiation Variational Inference](https://arxiv.org/abs/1603.00788)
-* `from abi_jax.laplace import ADLaplace` - Automatic Differentiation Laplace approximation.
-* `from abi_jax.mcmc import MCMC` - A helper class for external Markov Chain Monte Carlo (MCMC) sampling.
+* `from bijax.advi import ADVI` - [Automatic Differentiation Variational Inference](https://arxiv.org/abs/1603.00788)
+* [WIP]`from bijax.laplace import ADLaplace` - Automatic Differentiation Laplace approximation.
+* `from bijax.mcmc import MCMC` - A helper class for external Markov Chain Monte Carlo (MCMC) sampling.
 
-## How to use abi_jax?
+## How to use BIJAX?
 
-abi_jax is built without too many layers of abstractions or some new conventions. Thus, it is also useful for educational purposes. If you like to directly dive into the examples, please refer to the [examples](examples) directory.
+BIJAX is built without layers of abstractions or proposing new conventions. Thus, it is also useful for educational purposes. If you like to directly dive into the examples, please refer to the [examples](examples) directory.
 
 
-There are a few core components of abi_jax:
+There are a few core components of bijax:
 
 ### Prior
 `tensoflow_probability.substrates.jax` should be used to define the distributions for prior.
@@ -110,7 +110,7 @@ params = model.init(seed)
 ```
 
 ### Optimization
-Models in abi_jax have `loss_fn` method which can be used to compute the loss. The loss can be optimized with any method that work with `JAX`. We also have a utility function `from abi_jax.utils import train` to train the model using `optax` optimizers.
+Models in bijax have `loss_fn` method which can be used to compute the loss. The loss can be optimized with any method that work with `JAX`. We also have a utility function `from bijax.utils import train` to train the model using `optax` optimizers.
 
 ### Get the posterior distribution
 Some of the models (`ADVI` and `ADLaplace`) support `.apply()` method to get the posterior distribution.
