@@ -57,6 +57,17 @@ class Posterior:
             f = jax.vmap(f)
         return f(sample)
 
+    def prob(self, sample, sample_shape):
+        log_prob = self.log_prob(sample, sample_shape)
+        return jax.tree_map(jnp.exp, log_prob)
+
+
+def fill_in_bijector(bijector, prior):
+    for key in prior:
+        if key not in bijector:
+            bijector[key] = tfb.Identity()
+    return bijector
+
 
 def inverse_transform_dist(dist_pytree, bijector_pytree):
     is_leaf = lambda x: isinstance(x, tfd.Distribution)
@@ -103,6 +114,7 @@ def transform_tree(pytree, bijector_pytree):
 
 
 def inverse_transform_tree(pytree, bijector_pytree):
+    print(bijector_pytree)
     return jax.tree_map(lambda param, bijector: bijector.inverse(param), pytree, bijector_pytree)
 
 

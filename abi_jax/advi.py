@@ -8,6 +8,7 @@ from .core import (
     get_full_rank,
     get_low_rank,
     get_mean_field,
+    fill_in_bijector,
 )
 
 from .core import Posterior
@@ -20,7 +21,13 @@ tfd = tfp.distributions
 
 class ADVI:
     def __init__(
-        self, prior, bijector, log_likelihood_fn, vi_type="mean_field", rank=None, ordered_posterior_bijectors=None
+        self,
+        prior,
+        bijector={},
+        log_likelihood_fn=None,
+        vi_type="mean_field",
+        rank=None,
+        ordered_posterior_bijectors=None,
     ):
         """Automatic Differentiation Variational Inference
         A model class that implements the ADVI algorithm.
@@ -45,16 +52,15 @@ class ADVI:
                                                     So, the ordered_posterior_bijectors can be [tfb.Identity(), tfb.Exp()] corresponding to `loc` and `scale_diag`.
         """
 
-        assert bijector.keys() == prior.keys(), "The keys in `prior` and `bijector` must be the same."
-        # check_distribution_zero_batch(prior)  # Assert that the prior distribution has no batch dimension.
-
         self.prior = prior
+        self.bijector = fill_in_bijector(bijector, self.prior)
+
+        assert self.bijector.keys() == self.prior.keys(), "The keys in `prior` and `bijector` must be the same."
 
         assert (vi_type == "low_rank") == (
             rank is not None
         ), "`rank` must be specified only if `vi_type` is `low_rank`."
 
-        self.bijector = bijector
         self.log_likelihood_fn = log_likelihood_fn
         self.vi_type = vi_type
 
@@ -73,7 +79,7 @@ class ADVI:
                 self.approx_normal_prior, ordered_posterior_bijectors
             )
 
-    def init(self, seed, initializer=jax.nn.initializers.normal()):
+    def init(self, seed, initializer=jax.nn.initializers.normal(stddev=1.0)):
         return {"posterior": initialize_params(self.posterior, seed, initializer)}
 
     def loss_fn(self, params, outputs, inputs, full_data_size, seed, n_samples=1):
