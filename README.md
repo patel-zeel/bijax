@@ -4,6 +4,12 @@ Bayesian Inference in JAX.
 
 ## Installation
 
+Install stable version:
+```
+pip install bijax
+```
+
+Install latest version:
 ```
 pip install git+https://github.com/patel-zeel/bijax.git
 ```
