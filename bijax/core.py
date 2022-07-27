@@ -12,6 +12,8 @@ class CheckTypesFilter(logging.Filter):
 logger.addFilter(CheckTypesFilter())
 ############################################
 
+import numpy as np
+
 import jax
 from jax.flatten_util import ravel_pytree
 import jax.numpy as jnp
@@ -21,6 +23,17 @@ tfd = tfp.distributions
 tfb = tfp.bijectors
 
 from .utils import seeds_like
+
+
+class Prior:
+    def __init__(self, prior):
+        self.prior = prior
+
+    def sample(self, seed, sample_shape):
+        return sample_dist(self.prior, seed, sample_shape)
+
+    def log_prob(self, sample_pytree):
+        return log_prob_dist(self.prior, sample_pytree)
 
 
 class Posterior:
@@ -42,7 +55,7 @@ class Posterior:
         return f(sample)
 
     def log_prob(self, sample, sample_shape=()):
-        def log_prob_per_sample(sample_tree):
+        def log_prob_no_batch(sample_tree):
             approx_normal_sample_tree = inverse_transform_tree(sample_tree, self.bijector)
             approx_normal_sample, _ = ravel_pytree(approx_normal_sample_tree)
             normal_log_prob = self.posterior.log_prob(approx_normal_sample)
@@ -52,7 +65,7 @@ class Posterior:
             jacobian = ravel_pytree(jacobian_tree)[0].sum()
             return normal_log_prob + jacobian
 
-        f = log_prob_per_sample
+        f = log_prob_no_batch
         for _ in range(len(sample_shape)):
             f = jax.vmap(f)
         return f(sample)
@@ -60,6 +73,35 @@ class Posterior:
     def prob(self, sample, sample_shape):
         log_prob = self.log_prob(sample, sample_shape)
         return jax.tree_map(jnp.exp, log_prob)
+
+
+class GenerativeDistribution:
+    def __init__(self, latent_distribution, likelihood_fn):
+        self.latent_distribution = latent_distribution
+        self.likelihood_fn = likelihood_fn
+
+    def log_prob(self, latent_params, outputs, inputs, sample_shape=()):
+        def log_prob_no_batch(latent_params, outputs):
+            likelihood = self.likelihood_fn(latent_params, inputs=inputs)
+            likelihood.log_prob(outputs)
+
+        f = log_prob_no_batch
+        for _ in range(len(sample_shape)):
+            f = jax.vmap(f)
+        return f(self.latent_params, self.outputs)
+
+    def sample(self, seed, inputs=None, sample_shape=()):
+        latent_params = self.latent_distribution.sample(seed=seed, sample_shape=sample_shape)
+
+        def sample_no_batch(latent_params, seed):
+            likelihood = self.likelihood_fn(latent_params, inputs=inputs)
+            return likelihood.sample(seed=seed)
+
+        f = sample_no_batch
+        for _ in range(len(sample_shape)):
+            f = jax.vmap(f)
+        seeds = jax.random.split(seed, np.prod(sample_shape)).reshape(*sample_shape, -1)
+        return f(latent_params, seeds)
 
 
 def fill_in_bijector(bijector, prior):

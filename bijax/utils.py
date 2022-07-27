@@ -3,7 +3,7 @@ from jax.flatten_util import ravel_pytree
 import optax
 
 
-def train_fn(loss_fn, params, optimizer, n_epochs, seed, return_args={}):
+def train_fn(loss_fn, params, optimizer, n_epochs, seed, return_args=set()):
     value_and_grad_fn = jax.value_and_grad(loss_fn)
     state = optimizer.init(params)
 
@@ -17,7 +17,7 @@ def train_fn(loss_fn, params, optimizer, n_epochs, seed, return_args={}):
 
     seeds = jax.random.split(seed, n_epochs)
     (params, states), (losses, params_list) = jax.lax.scan(one_step, (params, state), xs=seeds)
-    return_dict = {"params": params}
+    return_dict = {"params": params, "losses": losses}
     for key in return_args:
         return_dict[key] = locals()[key]
     return return_dict
