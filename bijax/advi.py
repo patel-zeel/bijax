@@ -19,7 +19,7 @@ import tensorflow_probability.substrates.jax as tfp
 tfd = tfp.distributions
 tfb = tfp.bijectors
 
-from typing import Dict, Callable, Literal, Optional
+from typing import Dict, Callable, Optional
 
 
 class ADVI:
@@ -28,7 +28,7 @@ class ADVI:
         prior: Dict[str, tfd.Distribution],
         likelihood_fn: Callable[..., tfd.Distribution],
         prior_constraints: Optional[Dict[str, tfb.Bijector]] = {},
-        vi_type: Optional[Literal["mean_field", "low_rank", "full_rank"]] = "mean_field",
+        vi_type: str = 'mean_field',
         rank: Optional[int] = None,
         ordered_posterior_bijectors=None,
     ):
