@@ -3,20 +3,33 @@ from jax.flatten_util import ravel_pytree
 import optax
 
 
-def train_fn(loss_fn, params, optimizer, n_epochs, seed, return_args=set()):
+def train_fn(loss_fn, params, optimizer, n_epochs, seed=None, return_args=set()):
     value_and_grad_fn = jax.value_and_grad(loss_fn)
     state = optimizer.init(params)
 
-    @jax.jit
-    def one_step(params_and_state, seed):
-        params, state = params_and_state
-        loss, grads = value_and_grad_fn(params, seed=seed)
-        updates, state = optimizer.update(grads, state)
-        params = optax.apply_updates(params, updates)
-        return (params, state), (loss, params)
+    if seed is None:
+        @jax.jit
+        def one_step(params_and_state, _):
+            params, state = params_and_state
+            loss, grads = value_and_grad_fn(params)
+            updates, state = optimizer.update(grads, state)
+            params = optax.apply_updates(params, updates)
+            return (params, state), (loss, params)
 
-    seeds = jax.random.split(seed, n_epochs)
-    (params, states), (losses, params_list) = jax.lax.scan(one_step, (params, state), xs=seeds)
+        (params, states), (losses, params_list) = jax.lax.scan(one_step, (params, state), xs=None, length=n_epochs)
+    else:
+
+        @jax.jit
+        def one_step(params_and_state, seed):
+            params, state = params_and_state
+            loss, grads = value_and_grad_fn(params, seed=seed)
+            updates, state = optimizer.update(grads, state)
+            params = optax.apply_updates(params, updates)
+            return (params, state), (loss, params)
+
+        seeds = jax.random.split(seed, n_epochs)
+        (params, states), (losses, params_list) = jax.lax.scan(one_step, (params, state), xs=seeds)
+
     return_dict = {"params": params, "losses": losses}
     for key in return_args:
         return_dict[key] = locals()[key]

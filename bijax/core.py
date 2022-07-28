@@ -156,7 +156,6 @@ def transform_tree(pytree, bijector_pytree):
 
 
 def inverse_transform_tree(pytree, bijector_pytree):
-    print(bijector_pytree)
     return jax.tree_map(lambda param, bijector: bijector.inverse(param), pytree, bijector_pytree)
 
 
