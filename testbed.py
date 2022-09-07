@@ -1,23 +1,54 @@
 import jax
+from jax.flatten_util import ravel_pytree
 import jax.numpy as jnp
-import distrax
+import optax
+import tensorflow_probability.substrates.jax as tfp
 
-mean = jnp.array([0.1, 0.2])
-scale = jnp.array([0.4, 0.5])
-key = jax.random.PRNGKey(1)
+tfd = tfp.distributions
+tfb = tfp.bijectors
 
-dist_uni = distrax.Normal(mean, scale)
-trans_uni = distrax.Transformed(dist_uni, distrax.Sigmoid())
-trans_uni_sample, log_prob = trans_uni.sample_and_log_prob(seed=key)
-print(f"{trans_uni_sample=}, {log_prob=}, {log_prob.sum()=}")
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-# dist_bi = distrax.MultivariateNormalDiag(mean, scale)
-# trans_bi = distrax.Transformed(dist_bi, distrax.Sigmoid(event_ndims_in=2))
-# trans_bi_sample, log_prob = trans_bi.sample_and_log_prob(seed=key)
-# print(f"{trans_bi_sample=}, {log_prob}")
+from bijax import ADVI
+from bijax.utils import train_fn
 
-dist_bi = distrax.MultivariateNormalDiag(mean, scale)
-transform = jax.nn.sigmoid
-trans_bi_sample, log_prob = dist_bi.sample_and_log_prob(seed=key)
-log_jac = jnp.log(jnp.linalg.det(jax.jacfwd(transform)(trans_bi_sample)))
-print(f"{transform(trans_bi_sample)=}, {log_prob - log_jac}")
+import pymc as pm
+import numpy as np
+import arviz as az
+
+from bijax.variational_distributions import VariationalDistribution
+
+support = jnp.linspace(0.01, 0.99, 100)
+print(support)
+b = tfb.Sigmoid()
+v_dist = tfd.Normal(0, 1)
+
+
+def prob(sample):
+    log_prob = v_dist.log_prob(b.inverse(sample))
+    inv_log_det_jac = b.inverse_log_det_jacobian(sample)
+    # jax.debug.print(
+    #     "log_prob: {log_prob}, inv_log_det_jac: {inv_log_det_jac} sample {sample}",
+    #     log_prob=log_prob,
+    #     inv_log_det_jac=inv_log_det_jac,
+    #     sample=b.inverse(sample),
+    # )
+    return jnp.exp(log_prob + inv_log_det_jac)
+
+
+prob = jax.vmap(prob)
+
+prior = {"p": tfd.Normal(0, 1)}
+bijector = {"p": tfb.Sigmoid()}
+
+var_dist = VariationalDistribution(prior=prior, bijector=bijector)
+params = var_dist._initialise_params(0)
+params["log_scale_diag"] = jnp.log(1.0).reshape((1,))
+probs = var_dist.prob({"p": support}, sample_shape=(len(support),), params=params)
+plt.plot(support, probs, color="g")
+
+plt.plot(support, tfd.Beta(2, 2).prob(support))
+plt.plot(support, b(v_dist).prob(support))
+plt.plot(support, prob(support), "--")
+plt.savefig("test.png")

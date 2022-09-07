@@ -1,6 +1,33 @@
 import jax
 from jax.flatten_util import ravel_pytree
+import jax.tree_util as jtu
 import optax
+
+import tensorflow_probability.substrates.jax as tfp
+from typing import Union
+from jaxtyping import PyTree, Array
+
+tfd = tfp.distributions
+tfb = tfp.bijectors
+
+
+def get_inverse_log_det_jacobian(objects, bijectors):
+    values = jtu.tree_map(lambda sample, bijector: bijector.inverse_log_det_jacobian(sample), objects, bijectors)
+    return ravel_pytree(values)[0].sum()
+
+
+def constrain(
+    objects: PyTree[Union[Array, tfd.Distribution]], bijectors: PyTree[tfb.Bijector]
+) -> PyTree[Union[Array, tfd.Distribution]]:
+    is_leaf = lambda x: isinstance(x, tfd.Distribution)
+    return jax.tree_map(lambda object, bijector: bijector(object), objects, bijectors, is_leaf=is_leaf)
+
+
+def unconstrain(
+    objects: PyTree[Union[Array, tfd.Distribution]], bijectors: PyTree[tfb.Bijector]
+) -> PyTree[Union[Array, tfd.Distribution]]:
+    inverse_bijectors = jax.tree_map(tfb.Invert, bijectors, is_leaf=lambda x: isinstance(x, tfb.Bijector))
+    return constrain(objects, inverse_bijectors)
 
 
 def train_fn(loss_fn, params, optimizer, n_epochs, seed=None, return_args=set()):
@@ -8,6 +35,7 @@ def train_fn(loss_fn, params, optimizer, n_epochs, seed=None, return_args=set())
     state = optimizer.init(params)
 
     if seed is None:
+
         @jax.jit
         def one_step(params_and_state, _):
             params, state = params_and_state
@@ -68,3 +96,9 @@ def seeds_like(params, seed, is_leaf=None):
     """
     values, treedef = jax.tree_flatten(params, is_leaf=is_leaf)
     return jax.tree_unflatten(treedef, jax.random.split(seed, len(values)))
+
+
+def fill_in_bijectors(bijector, distribution):
+    additional_keys = distribution.keys() - bijector.keys()
+    identity_bijectors = {key: tfb.Identity() for key in additional_keys}
+    return {**bijector, **identity_bijectors}

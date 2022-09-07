@@ -1,225 +1,68 @@
-######### Avoid TypeCheck Warning #########
-import logging
-
-logger = logging.getLogger()
-
-
-class CheckTypesFilter(logging.Filter):
-    def filter(self, record):
-        return "check_types" not in record.getMessage()
-
-
-logger.addFilter(CheckTypesFilter())
-############################################
-
-import numpy as np
-
 import jax
 from jax.flatten_util import ravel_pytree
+import jax.tree_util as jtu
 import jax.numpy as jnp
 import tensorflow_probability.substrates.jax as tfp
 
 tfd = tfp.distributions
 tfb = tfp.bijectors
 
-from .utils import seeds_like
+from bijax.utils import fill_in_bijectors
 
 
-class Prior:
-    def __init__(self, prior):
-        self.prior = prior
+class DistributionPyTree:
+    def __init__(self, base_distribution, bijector):
+        self.bijector = fill_in_bijectors(bijector, base_distribution)
+        self.base_distribution = base_distribution
 
-    def sample(self, seed, sample_shape):
-        return sample_dist(self.prior, seed, sample_shape)
+        # check if graph is valid
+        _ = self.sample(seed=jax.random.PRNGKey(0))
 
-    def log_prob(self, sample_pytree):
-        return log_prob_dist(self.prior, sample_pytree)
-
-
-class Posterior:
-    def __init__(self, posterior, approx_normal_prior, bijector):
-        assert isinstance(posterior, tfd.Distribution)
-        self.posterior = posterior
-        self.approx_normal_prior = approx_normal_prior
-        self.bijector = bijector
-
-    def sample(self, seed, sample_shape=()):
-        sample = self.posterior.sample(seed=seed, sample_shape=sample_shape)
-        unravel_fn = get_normal_posterior_size_and_unravel_fn(self.approx_normal_prior)[1]
-
-        def f(x):
-            return transform_tree(unravel_fn(x), self.bijector)
-
-        for _ in range(len(sample_shape)):
-            f = jax.vmap(f)
-        return f(sample)
-
-    def log_prob(self, sample, sample_shape=()):
-        def log_prob_no_batch(sample_tree):
-            approx_normal_sample_tree = inverse_transform_tree(sample_tree, self.bijector)
-            approx_normal_sample, _ = ravel_pytree(approx_normal_sample_tree)
-            normal_log_prob = self.posterior.log_prob(approx_normal_sample)
-            jacobian_tree = jax.tree_map(
-                lambda sample, bijector: bijector.inverse_log_det_jacobian(sample), sample_tree, self.bijector
-            )
-            jacobian = ravel_pytree(jacobian_tree)[0].sum()
-            return normal_log_prob + jacobian
-
-        f = log_prob_no_batch
-        for _ in range(len(sample_shape)):
-            f = jax.vmap(f)
-        return f(sample)
-
-    def prob(self, sample, sample_shape):
-        log_prob = self.log_prob(sample, sample_shape)
-        return jax.tree_map(jnp.exp, log_prob)
-
-
-class GenerativeDistribution:
-    def __init__(self, latent_distribution, likelihood_fn):
-        self.latent_distribution = latent_distribution
-        self.likelihood_fn = likelihood_fn
-
-    def log_prob(self, latent_params, outputs, inputs, sample_shape=()):
-        def log_prob_no_batch(latent_params, outputs):
-            likelihood = self.likelihood_fn(latent_params, inputs=inputs)
-            likelihood.log_prob(outputs)
-
-        f = log_prob_no_batch
-        for _ in range(len(sample_shape)):
-            f = jax.vmap(f)
-        return f(self.latent_params, self.outputs)
-
-    def sample(self, seed, inputs=None, sample_shape=()):
-        latent_params = self.latent_distribution.sample(seed=seed, sample_shape=sample_shape)
-
-        def sample_no_batch(latent_params, seed):
-            likelihood = self.likelihood_fn(latent_params, inputs=inputs)
-            return likelihood.sample(seed=seed)
-
-        f = sample_no_batch
-        for _ in range(len(sample_shape)):
-            f = jax.vmap(f)
-        seeds = jax.random.split(seed, np.prod(sample_shape)).reshape(*sample_shape, -1)
-        return f(latent_params, seeds)
-
-
-def fill_in_bijector(bijector, prior):
-    for key in prior:
-        if key not in bijector:
-            bijector[key] = tfb.Identity()
-    return bijector
-
-
-def inverse_transform_dist(dist_pytree, bijector_pytree):
-    is_leaf = lambda x: isinstance(x, tfd.Distribution)
-    return jax.tree_map(
-        lambda dist, bijector: tfd.TransformedDistribution(dist, tfb.Invert(bijector)),
-        dist_pytree,
-        bijector_pytree,
-        is_leaf=is_leaf,
-    )
-
-
-def sample_dist(dist_pytree, seed, sample_shape=()):
-    is_leaf = lambda dist: isinstance(dist, tfd.Distribution)
-    seeds = seeds_like(dist_pytree, seed, is_leaf=is_leaf)
-    samples = jax.tree_map(
-        lambda dist, seed: dist.sample(seed=seed, sample_shape=sample_shape), dist_pytree, seeds, is_leaf=is_leaf
-    )
-    return samples
-
-
-def log_prob_dist(dist_pytree, sample_pytree):
-    def is_leaf_dist(dist):
-        return isinstance(dist, tfd.Distribution)
-
-    def log_prob(dist, sample):
-        if isinstance(dist, tfd.Distribution):
-            return dist.log_prob(sample)
-        elif callable(dist):
-            var_names = dist.__code__.co_varnames
-            args = {var_name: sample_pytree[var_name] for var_name in var_names}
-            return dist(**args).log_prob(sample)
+    @staticmethod
+    def get_distribution(distribution, bijector):
+        if isinstance(distribution, tfd.Distribution):
+            return bijector(distribution)
+        elif callable(distribution):
+            var_names = distribution.__code__.co_varnames
+            distribution_fn = lambda **kwargs: bijector(distribution(**kwargs))
+            return (distribution_fn, var_names)
         else:
-            raise ValueError(f"Unknown type {type(dist)}")
+            raise ValueError("distribution must be a tfd.Distribution or a callable")
 
-    log_probs = jax.tree_map(
-        lambda dist, sample: log_prob(dist, sample), dist_pytree, sample_pytree, is_leaf=is_leaf_dist
-    )
+    def sample(self, sample_shape=(), seed=None):
+        sample = {}
 
-    return ravel_pytree(log_probs)[0].sum()  # sum over batch dimension
+        def sample_fn(name, key):
+            if name in sample:
+                return
+            distribution = self.base_distribution[name]
+            bijector = self.bijector[name]
+            if isinstance(distribution, tfd.Distribution):
+                sample[name] = bijector(distribution).sample(sample_shape, seed=key)
+            elif callable(distribution):
+                var_names = distribution.__code__.co_varnames
+                keys = jax.random.split(key, len(var_names))
+                keys = [key for key in keys]
+                jtu.tree_map(sample_fn, var_names, keys)
+                kwargs = {name: sample[name] for name in var_names}
+                sample[name] = bijector(distribution(**kwargs)).sample(sample_shape, seed=key)
 
+        names = list(self.base_distribution.keys())
+        keys = jax.random.split(seed, len(self.base_distribution))
+        keys = [key for key in keys]
+        jtu.tree_map(sample_fn, names, keys)
 
-def transform_tree(pytree, bijector_pytree):
-    return jax.tree_map(lambda param, bijector: bijector(param), pytree, bijector_pytree)
+        return sample
 
+    def log_prob(self, sample):
+        def log_prob_fn(sample_value, distribution, bijector):
+            if isinstance(distribution, tfd.Distribution):
+                return bijector(distribution).log_prob(sample_value)
+            elif callable(distribution):
+                var_names = distribution.__code__.co_varnames
+                kwargs = {name: sample[name] for name in var_names}
+                return bijector(distribution(**kwargs)).log_prob(sample_value)
+            else:
+                raise ValueError("distribution must be a Distribution or a callable")
 
-def inverse_transform_tree(pytree, bijector_pytree):
-    return jax.tree_map(lambda param, bijector: bijector.inverse(param), pytree, bijector_pytree)
-
-
-def transform_dist_params(dist, ordered_posterior_bijectors):
-    params, treedef = jax.tree_flatten(dist)
-    params = jax.tree_map(lambda param, bijector: bijector(param), params, ordered_posterior_bijectors)
-    return jax.tree_unflatten(treedef, params)
-
-
-def get_normal_posterior_size_and_unravel_fn(approx_normal_prior):
-    seed = jax.random.PRNGKey(0)
-    samples = sample_dist(approx_normal_prior, seed=seed, sample_shape=())
-    # for name, sample in samples.items():
-    #     assert (
-    #         sample.ndim < 2
-    #     ), f"'{name}' returned {sample.ndim} dimensional sample after transformation but should be 1d or scalar"
-    array, unravel_fn = ravel_pytree(samples)
-    return len(array), unravel_fn
-
-
-def get_mean_field(approx_normal_prior, ordered_posterior_bijectors=None):
-    if ordered_posterior_bijectors is None:
-        ordered_posterior_bijectors = [tfb.Identity(), tfb.Exp()]
-    size, unravel_fn = get_normal_posterior_size_and_unravel_fn(approx_normal_prior)
-    return (
-        tfd.MultivariateNormalDiag(loc=jnp.zeros(size), scale_diag=jnp.ones(size)),
-        unravel_fn,
-        ordered_posterior_bijectors,
-    )
-
-
-def get_low_rank(approx_normal_prior, rank=1, ordered_posterior_bijectors=None):
-    if ordered_posterior_bijectors is None:
-        ordered_posterior_bijectors = [tfb.Identity(), tfb.Exp(), tfb.Identity()]
-    size, unravel_fn = get_normal_posterior_size_and_unravel_fn(approx_normal_prior)
-    scale_perturb_factor = jnp.ones((size, rank))
-    return (
-        tfd.MultivariateNormalDiagPlusLowRank(
-            loc=jnp.zeros(size), scale_diag=jnp.ones(size), scale_perturb_factor=scale_perturb_factor
-        ),
-        unravel_fn,
-        ordered_posterior_bijectors,
-    )
-
-
-def get_full_rank(approx_normal_prior, ordered_posterior_bijectors=None):
-    if ordered_posterior_bijectors is None:
-        ordered_posterior_bijectors = [tfb.Identity(), tfb.Identity()]
-    size, unravel_fn = get_normal_posterior_size_and_unravel_fn(approx_normal_prior)
-    return (
-        tfd.MultivariateNormalTriL(loc=jnp.zeros(size), scale_tril=jnp.eye(size)),
-        unravel_fn,
-        ordered_posterior_bijectors,
-    )
-
-
-def check_distribution_zero_batch(dist_pytree):
-    is_leaf = lambda x: isinstance(x, tfd.Distribution)
-
-    def len_of_batch(dist):
-        if isinstance(dist, tfd.Distribution):
-            return len(dist.batch_shape)
-        elif callable(dist):
-            return 0
-
-    batch_lens = jax.tree_map(lambda dist: len_of_batch(dist), dist_pytree, is_leaf=is_leaf)
-    assert sum(jax.tree_leaves(batch_lens)) == 0, "The prior distributions must not have any batch dimension."
+        return jtu.tree_map(log_prob_fn, sample, self.base_distribution, self.bijector)
