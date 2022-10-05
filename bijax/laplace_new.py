@@ -1,26 +1,42 @@
+import logging
+import warnings
+
 import jax
-from jax.flatten_util import ravel_pytree
-import jax.tree_util as jtu
-import tensorflow_probability.substrates.jax as tfp
-tfd = tfp.distributions
-tfb = tfp.bijectors
-import optax
-from bijax.core import DistributionPyTree
-import seaborn as sns
-from tqdm import trange
+import jax.numpy as jnp
 import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
+import tensorflow_probability.substrates.jax as tfp
+from tqdm import trange
+
+logger = logging.getLogger()
 
 
-class ADLaplace:
-    def __init__(self, prior,bijector=tfp.bijectors.Identity(),get_likelihood=None) -> None:
-        self.prior = DistributionPyTree(self.prior, {})
+class CheckTypesFilter(logging.Filter):
+    def filter(self, record):
+        return "check_types" not in record.getMessage()
+
+
+logger.addFilter(CheckTypesFilter())
+
+import optax
+from sklearn.datasets import make_classification
+
+tfd = tfp.distributions
+
+
+class LaplaceApproximation:
+    def __init__(self, prior, likelihood, bijector=tfp.bijectors.Identity()) -> None:
+        self.prior = prior
         self.bijector = bijector
-        self.get_likelihood = get_likelihood
+        self.likelihood = likelihood
 
     def __neg_log_joint(self, theta, data):
         dist_prior = tfd.TransformedDistribution(
             distribution=self.prior, bijector=tfp.bijectors.Invert(self.bijector)
         )
+        x = -(dist_prior.log_prob(theta) + self.likelihood(self.bijector(theta), data))
+
         return -(
             dist_prior.log_prob(theta) + self.likelihood(self.bijector(theta), data)
         ).squeeze()
