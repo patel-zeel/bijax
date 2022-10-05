@@ -1,17 +1,9 @@
-import logging
-import warnings
-
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
-import numpy as np
 import seaborn as sns
 import tensorflow_probability.substrates.jax as tfp
-
-
 import optax
-from sklearn.datasets import make_classification
-
 tfd = tfp.distributions
 
 class LaplaceApproximation:
@@ -39,7 +31,7 @@ class LaplaceApproximation:
         optimizer = optax.adam(learning_rate=lr)
         state = optimizer.init(theta_map)
         losses = []
-        for i in range(max_iter):
+        for _ in range(max_iter):
             val, grad = gradient(theta_map, data)
             losses.append(val)
             update, state = optimizer.update(grad, state)
