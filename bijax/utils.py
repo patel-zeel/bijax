@@ -1,6 +1,7 @@
 import jax
 from jax.flatten_util import ravel_pytree
 import jax.tree_util as jtu
+import jax.numpy as jnp
 import optax
 
 import tensorflow_probability.substrates.jax as tfp
@@ -102,3 +103,11 @@ def fill_in_bijectors(bijector, distribution):
     additional_keys = distribution.keys() - bijector.keys()
     identity_bijectors = {key: tfb.Identity() for key in additional_keys}
     return {**bijector, **identity_bijectors}
+
+def get_shapes(params):
+    return jtu.tree_map(lambda x:x.shape, params)
+
+def svd_inverse(matrix, jitter = 1e-6):
+    U, S, V = jnp.linalg.svd(matrix+jnp.eye(matrix.shape[0])*jitter)
+    
+    return V.T/S@U.T
