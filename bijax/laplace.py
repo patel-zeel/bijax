@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from bijax.baselaplace import BaseLaplace
 from bijax.core import DistributionPyTree
 
-class Laplace_test:
+class Laplace:
     def __init__(self, prior, bijector, likelihood_fn=None, model=None, is_flax_model=False, subset_of_weights='all', hessian_structure='kfac'):
         self.prior = prior
         self.bijector = bijector
