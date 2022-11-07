@@ -5,6 +5,8 @@ from functools import partial
 from jax.flatten_util import ravel_pytree
 import optax
 import matplotlib.pyplot as plt
+import tensorflow_probability.substrates.jax as tfp
+tfd = tfp.distributions
 
 from bijax.baselaplace import BaseLaplace
 from bijax.core import DistributionPyTree
@@ -29,17 +31,19 @@ class Laplace:
     # def init(self, key):
     #     return {"variational_params": self.variational_distribution._initialise_params(key)}
 
-    def fit(self, X, y, key=jax.random.PRNGKey(0), lr=0.03, epochs=1000, verbose=True):
+    def fit(self, X, y, key=jax.random.PRNGKey(0), lr=0.03, epochs=1000, verbose=True, only_map=False):
         map_params, _ = self.__get_map_params(X, y, key, lr, epochs, verbose)
         # print("map_params",map_params, type(map_params))
         self.laplace_distribution = self.__get_class_partial(map_params=map_params)
-        self.laplace_distribution.fit(X, y)
+        if not only_map:
+            self.laplace_distribution.fit(X, y)
         return map_params
             
     def loss_fn_flax(self, params, X, y, noise_var = 0.1):
         y_pred = self.model.apply(params, X)
         flat_params = ravel_pytree(params)[0]
         log_prior = jax.scipy.stats.norm.logpdf(flat_params).sum()
+        # log_prior = tfd.Normal(0., 1.).log_prob(flat_params).sum()#/len(flat_params)
         log_likelihood = jax.scipy.stats.norm.logpdf(y, loc=y_pred, scale=noise_var).sum()
         
         return -(log_prior + log_likelihood)

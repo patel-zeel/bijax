@@ -1,3 +1,4 @@
+import math
 import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
@@ -128,8 +129,9 @@ class FullLLLaplace(BaseLaplace):
         return flat_sample
     
     def predict(self, X, seed, shape):
+        n_samples = math.prod(shape)
         flat_sample = self.sample(seed, shape)
-        flat_thetas_exceptlast=jnp.broadcast_to(self.flat_params[:-self.len_last].reshape(-1,1).T,(shape, len(self.flat_params)-self.len_last))
+        flat_thetas_exceptlast=jnp.broadcast_to(self.flat_params[:-self.len_last].reshape(-1,1).T,(n_samples, len(self.flat_params)-self.len_last))
         # print("self.flat_params[:-self.len_last].reshape(-1,1).T.shape,flat_thetas_exceptlast.shape",
         #       self.flat_params[:-self.len_last].reshape(-1,1).T.shape,flat_thetas_exceptlast.shape)
         # print("flat_sample.shape", flat_sample.shape)
